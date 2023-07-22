@@ -68,23 +68,44 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use(morgan("combined"));
 
-app.use(session({
-    secret: env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: true,
-    cookie: {
-        maxAge: 24 * 60 * 60 * 100, //one day
-        // maxAge: 20 * 1000 //test for 20 seconds (need to manually refresh to check)
-        // secure: false,
-        // httpOnly: false,
-        // sameSite: 'none',
-        // domain: env.FRONTEND_URL
-    },
-    rolling: true, //refresh cooking key as long as user is using the app
-    store: MongoStore.create({
-        mongoUrl: env.MONGO_CONNECTION_STRING
-    })
-}));
+if (process.env.NODE_ENV === 'production') {
+    app.use(session({
+        secret: env.SESSION_SECRET,
+        resave: false,
+        saveUninitialized: true,
+        cookie: {
+            maxAge: 24 * 60 * 60 * 100, //one day
+            // maxAge: 20 * 1000 //test for 20 seconds (need to manually refresh to check)
+            secure: true,
+            httpOnly: false,
+            sameSite: 'none',
+            // domain: env.FRONTEND_URL
+        },
+        rolling: true, //refresh cooking key as long as user is using the app
+        store: MongoStore.create({
+            mongoUrl: env.MONGO_CONNECTION_STRING
+        })
+    }));
+} else {
+    app.use(session({
+        secret: env.SESSION_SECRET,
+        resave: false,
+        saveUninitialized: true,
+        cookie: {
+            maxAge: 24 * 60 * 60 * 100, //one day
+            // maxAge: 20 * 1000 //test for 20 seconds (need to manually refresh to check)
+            // secure: false,
+            // httpOnly: false,
+            // sameSite: 'none',
+            // domain: env.FRONTEND_URL
+        },
+        rolling: true, //refresh cooking key as long as user is using the app
+        store: MongoStore.create({
+            mongoUrl: env.MONGO_CONNECTION_STRING
+        })
+    }));
+}
+
 
 app.use("/api/users", UserRoutes);
 // app.use("/api/notes", NotesRoutes);
