@@ -1,13 +1,13 @@
 import { RequestHandler } from "express";
 import NoteModel from "../models/note";
 import createHttpError from "http-errors";
-import mongoose from "mongoose";
+// import mongoose from "mongoose";
 import { assertIsDefined } from "../utils/assertIsDefined";
 
 //Specifying RequestHandler as type, TypeScript can infer the types of arguments
 export const getNotes: RequestHandler = async (req, res, next) => {
     // res.send("Hello, World");
-    const authenticatedUserId = req.session.userId;
+    const authenticatedUserId = req.session.userId || req.sess_user_id;
 
     // let authenticatedUserId;
     // if (req.headers.authorization) {
@@ -20,7 +20,10 @@ export const getNotes: RequestHandler = async (req, res, next) => {
     try {
         assertIsDefined(authenticatedUserId);
         // throw Error("Forcing error test!");
-        const notes = await NoteModel.find({ userId: authenticatedUserId }).exec();
+
+        const notes = await NoteModel.findAll({ where: { userId: authenticatedUserId } });
+
+        //const notes = await NoteModel.find({ userId: authenticatedUserId }).exec();
         res.status(200).json(notes);
     } catch (err) {
         next(err);//go to error handler middleware
@@ -29,7 +32,7 @@ export const getNotes: RequestHandler = async (req, res, next) => {
 
 export const getNote: RequestHandler = async (req, res, next) => {
     const noteId = req.params.noteId;
-    const authenticatedUserId = req.session.userId;
+    const authenticatedUserId = req.session.userId || req.sess_user_id;
     // let authenticatedUserId;
     // if (req.headers.authorization) {
     //     authenticatedUserId = new mongoose.Types.ObjectId(req.headers.authorization.split(' ')[1]);
@@ -41,6 +44,19 @@ export const getNote: RequestHandler = async (req, res, next) => {
     try {
         assertIsDefined(authenticatedUserId);
 
+        await NoteModel.findByPk(noteId).then((record) => {
+            if (record === null) {
+                throw createHttpError(404, "Note not found");
+            } else {
+                if (!record?.dataValues("userId").equals(authenticatedUserId)) {
+                    throw createHttpError(401, "You cannot access this note");
+                } else {
+                    res.status(200).json(record);
+                }
+            }
+        });
+
+        /*
         if (!mongoose.isValidObjectId(noteId)) {
             throw createHttpError(400, "Invalid note id");
         }
@@ -54,8 +70,9 @@ export const getNote: RequestHandler = async (req, res, next) => {
         if (!note.userId?.equals(authenticatedUserId)) {
             throw createHttpError(401, "You cannot access this note");
         }
+        */
 
-        res.status(200).json(note);
+        // res.status(200).json(note);
     } catch (err) {
         next(err);//go to error handler middleware
     }
@@ -74,7 +91,7 @@ export const createNote: RequestHandler<unknown, unknown, CreateNoteType, unknow
     // console.log(req.body);
     const title = req.body.title;
     const text = req.body.text;
-    const authenticatedUserId = req.session.userId;
+    const authenticatedUserId = req.session.userId || req.sess_user_id;
 
     // let authenticatedUserId;
     // if (req.headers.authorization) {
@@ -91,13 +108,16 @@ export const createNote: RequestHandler<unknown, unknown, CreateNoteType, unknow
             throw createHttpError(400, "Note body is missing title parameter");
         }
 
-        const newNote = await NoteModel.create({
+        // const newNote = await NoteModel.create({
+        await NoteModel.create({
             userId: authenticatedUserId,
             title: title,
             text: text
-        });
+        }).then((newNote => {
+            res.status(201).json(newNote);
+        }))
 
-        res.status(201).json(newNote);
+        // res.status(201).json(newNote);
 
     } catch (err) {
         next(err);//go to error handler middleware
@@ -117,7 +137,7 @@ export const updateNote: RequestHandler<UpdateNoteParams, unknown, UpdateNoteBod
     const noteId = req.params.noteId;
     const noteTitle = req.body.title;
     const noteText = req.body.text;
-    const authenticatedUserId = req.session.userId;
+    const authenticatedUserId = req.session.userId || req.sess_user_id;
     // let authenticatedUserId;
     // if (req.headers.authorization) {
     //     authenticatedUserId = new mongoose.Types.ObjectId(req.headers.authorization.split(' ')[1]);
@@ -129,6 +149,27 @@ export const updateNote: RequestHandler<UpdateNoteParams, unknown, UpdateNoteBod
     try {
         assertIsDefined(authenticatedUserId);
 
+        if (!noteTitle) {
+            throw createHttpError(400, "Title paramter not found in Body")
+        }
+
+        const note = await NoteModel.findOne({ where: { id: noteId } });
+
+        if (note === null) {
+            throw createHttpError(404, "Note not found");
+        } else {
+
+            await NoteModel.update(
+                { "title": noteTitle, text: noteText },
+                { where: { id: noteId } }
+            ).then(async (success) => {
+                let updatedNote = await NoteModel.findOne({ where: { id: noteId } });
+                console.log("updated note is", updatedNote);
+                res.status(200).json(updatedNote);
+            });
+        }
+
+        /*
         if (!mongoose.isValidObjectId(noteId)) {
             throw createHttpError(400, "Invalid note id");
         }
@@ -156,6 +197,7 @@ export const updateNote: RequestHandler<UpdateNoteParams, unknown, UpdateNoteBod
         // NoteModel.findByIdAndUpdate(note);// But this is redundant as we have already checked if note exists above
 
         res.status(200).json(updatedNote);
+        */
     } catch (err) {
         next(err);//go to error handler middleware
     }
@@ -163,7 +205,7 @@ export const updateNote: RequestHandler<UpdateNoteParams, unknown, UpdateNoteBod
 
 export const deleteNote: RequestHandler = async (req, res, next) => {
     const noteId = req.params.noteId;
-    const authenticatedUserId = req.session.userId;
+    const authenticatedUserId = req.session.userId || req.sess_user_id;
     // let authenticatedUserId;
     // if (req.headers.authorization) {
     //     authenticatedUserId = new mongoose.Types.ObjectId(req.headers.authorization.split(' ')[1]);
@@ -175,6 +217,17 @@ export const deleteNote: RequestHandler = async (req, res, next) => {
     try {
         assertIsDefined(authenticatedUserId);
 
+        const note = await NoteModel.findOne({ where: { id: noteId } });
+
+        if (note === null) {
+            throw createHttpError(404, "Note not found");
+        } else {
+            await note.destroy();
+            res.sendStatus(204);//since we are not sending body here, so instead of status do sendStatus
+        }
+
+
+        /*
         if (!mongoose.isValidObjectId(noteId)) {
             throw createHttpError(400, "Invalid note Id");
         }
@@ -192,6 +245,8 @@ export const deleteNote: RequestHandler = async (req, res, next) => {
         await note.deleteOne();
 
         res.sendStatus(204);//since we are not sending body here, so instead of status do sendStatus
+        */
+
 
     } catch (err) {
         next(err);//go to error handler middleware
