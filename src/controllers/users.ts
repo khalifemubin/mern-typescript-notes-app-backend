@@ -3,6 +3,7 @@ import createHttpError from "http-errors";
 import Usermodel from "../models/user";
 import bcrypt from "bcryptjs";
 import SessionModel from "../models/session";
+import NotesModel from "../models/note";
 
 export const getAuthenticatedUser: RequestHandler = async (req, res, next) => {
     const authenticatedUserId = req.session.userId || req.sess_user_id;
@@ -147,31 +148,10 @@ export const login: RequestHandler<unknown, unknown, loginBody, unknown> = async
 
         // console.log(`User id for session is :${user.getDataValue("id")}`);
 
-        await Usermodel.findOne({ where: { username: username }, attributes: ['id', 'username', 'email', 'password'] }).then(async (data) => {
-            // if (req.session.userId) {
-            //     await req.session.regenerate(function (err) {
-            //         if (err) next(err)
-
-            //         req.session.userId = data?.getDataValue("id");
-            //     });
-            // } else {
-            //     req.session.userId = data?.getDataValue("id");
-            // }
-            console.log(`Loggin in with session id: ${req.sessionID}`);
-
-            // let jsonData = { data: data, sessionID: req.sessionID };
-            let jsonData = { ...data, sessionID: req.sessionID };
-            req.session.userId = data?.getDataValue("id");
-            req.session.save((err) => {
-                if (err) next(err)
-                return res.status(201).send(jsonData);
-            });
-
-        })
-
-        // req.session.userId = user.getDataValue("id");
-        // return res.status(201).send(user);
-        // return res.status(201).send("User logged in successfully");
+        req.sess_user_id = user.getDataValue("id");
+        req.session.userId = user.getDataValue("id");
+        user.setDataValue("sessionID", req.sessionID);
+        return res.status(201).json(user);
 
         /*
         const user = await Usermodel.findOne({ username: username }).select("+password +email").lean().exec();
@@ -205,6 +185,43 @@ export const logout: RequestHandler = async (req, res, next) => {
     }
 
     res.sendStatus(200);
+
+    // req.session.destroy(error => {
+    //     if (error) {
+    //         next(error)
+    //     } else {
+    //         res.sendStatus(200)
+    //     }
+    // });
+}
+
+export const deleteAccount: RequestHandler = async (req, res, next) => {
+    if (req.headers.authorization) {
+        let sess_user_id = req.headers.authorization.split(' ')[1];
+
+        await SessionModel.findOne({ where: { sid: sess_user_id } }).then(async (record) => {
+            if (record !== null) {
+                let stored_user_id = record?.getDataValue("data");
+                let json_obj_record = JSON.parse(stored_user_id);
+                let delete_user_id = json_obj_record.userId;
+
+                //Delete all notes
+                await NotesModel.findOne({ where: { userId: delete_user_id } });
+
+                //Delete the user
+                await Usermodel.destroy({ where: { id: delete_user_id } });
+
+                //Finally delete the sessions of this user
+                await SessionModel.destroy({
+                    where: { "data.userId": delete_user_id }
+                })
+            }
+
+            res.sendStatus(204);
+        });
+    }
+
+
 
     // req.session.destroy(error => {
     //     if (error) {

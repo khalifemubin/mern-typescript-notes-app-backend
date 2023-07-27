@@ -16,6 +16,7 @@ router.get("/", requiresAuth, UserController.getAuthenticatedUser);
 router.post("/signup", UserController.signUp);
 router.post("/login", UserController.login);
 router.post("/logout", UserController.logout);
+router.post("/delete-account", UserController.deleteAccount);
 
 export default router;
 
