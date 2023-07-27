@@ -135,16 +135,18 @@ app.use((req, res, next) => {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
-    console.error(err);
+    // console.error(err);
     let errorMessage = "An unknown error occured";
     let statusCode = 500;
     // if (err instanceof Error) errorMessage = err.message;
-    console.log(`isHttpError: ${isHttpError(err)}`);
+    // console.log(`isHttpError: ${isHttpError(err)}`);
 
     if (isHttpError(err)) {
         statusCode = err.status;
         errorMessage = err.message;
     }
+
+    console.log(errorMessage);
     // res.status(statusCode).json({ error: errorMessage })
     return res.status(statusCode).send({ error: errorMessage });
 });
