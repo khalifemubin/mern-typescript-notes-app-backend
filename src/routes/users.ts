@@ -17,6 +17,7 @@ router.post("/signup", UserController.signUp);
 router.post("/login", UserController.login);
 router.post("/logout", UserController.logout);
 router.post("/delete-account", UserController.deleteAccount);
+// router.post("/request-password-reset", UserController.sendResetPassword);
 
 export default router;
 
