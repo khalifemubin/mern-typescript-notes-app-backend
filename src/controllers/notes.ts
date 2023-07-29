@@ -162,7 +162,7 @@ export const updateNote: RequestHandler<UpdateNoteParams, unknown, UpdateNoteBod
             await NoteModel.update(
                 { "title": noteTitle, text: noteText },
                 { where: { id: noteId } }
-            ).then(async (success) => {
+            ).then(async (_) => {
                 let updatedNote = await NoteModel.findOne({ where: { id: noteId } });
                 console.log("updated note is", updatedNote);
                 res.status(200).json(updatedNote);

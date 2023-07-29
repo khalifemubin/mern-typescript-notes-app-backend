@@ -4,6 +4,10 @@ import Usermodel from "../models/user";
 import bcrypt from "bcryptjs";
 import SessionModel from "../models/session";
 import NotesModel from "../models/note";
+import nodemailer from "nodemailer";
+import env from "../utils/validateEnv";
+import TokenModel from "../models/token";
+import { Str } from "@supercharge/strings";
 
 export const getAuthenticatedUser: RequestHandler = async (req, res, next) => {
     const authenticatedUserId = req.session.userId || req.sess_user_id;
@@ -220,14 +224,97 @@ export const deleteAccount: RequestHandler = async (req, res, next) => {
             res.sendStatus(204);
         });
     }
+}
 
+export const sendResetPassword: RequestHandler = async (req, res, next) => {
+    const email = req.body.email;
 
+    try {
+        if (!email) {
+            throw createHttpError(400, "Parameters missing");
+        }
 
-    // req.session.destroy(error => {
-    //     if (error) {
-    //         next(error)
-    //     } else {
-    //         res.sendStatus(200)
-    //     }
-    // });
+        const user = await Usermodel.findOne({ where: { email: email }, attributes: ['id', 'username', 'email', 'password'] });
+
+        if (!user) {
+            throw createHttpError(404, "Email Not Found");
+        }
+
+        //Sening Email Starts
+        let transporter = nodemailer.createTransport({
+            host: env.MAIL_HOST,
+            auth: {
+                user: env.MAIL_USER,
+                pass: env.MAIL_PASSWD
+            }
+        });
+
+        let forgotPasswordToken = Str.random();
+        let password_reset_link = env.FRONTEND_URL + "/reset-password/" + forgotPasswordToken;
+        let html_mail_content
+            = `Hello ${user.getDataValue("username")},<br/>A request was made by you to reset the password.<br/>
+               <br/>Use the following link to reset the same:<br/>${password_reset_link}<br/><br/>Please do not reply to this mail.
+               <br/><br/>Regards,<br/><br/>Team MERN TYPESCRIPT NOTES`;
+
+        let mailOptions = {
+            from: env.FROM_MAIL,
+            to: user.getDataValue("email"),
+            subject: 'Password Reset Request Link',
+            html: html_mail_content
+        };
+
+        await TokenModel.create({
+            token: forgotPasswordToken,
+            userId: user.getDataValue("id"),
+        }).then((_) => {
+            transporter.sendMail(mailOptions, function (error, _) {
+                if (error) {
+                    next(error);
+                } else {
+                    return res.sendStatus(200);
+                }
+            });
+        }).catch((error) => {
+            next(error);
+        });
+        //Sening Email Ends
+
+    } catch (error) {
+        next(error);
+    }
+}
+
+export const resetPassword: RequestHandler = async (req, res, next) => {
+    const new_password = req.body.new_password;
+    const token = req.body.actionToken;
+
+    try {
+        if (!new_password) {
+            throw createHttpError(400, "Parameters missing");
+        }
+
+        //search for the token in the table
+        let token_record = await TokenModel.findOne({ where: { token: token } });
+
+        //if it does not exists send 404
+        if (!token_record) {
+            throw createHttpError(404, "Invalid Link");
+        }
+
+        let hashed_updated_password = await bcrypt.hash(new_password, 10);
+        //if, it does, then get userid value from table
+        let userId = token_record.getDataValue("userId");
+
+        //update the password of the user
+        await Usermodel.update(
+            { "password": hashed_updated_password },
+            { where: { id: userId } }
+        ).then(async (_) => {
+            await token_record?.destroy();
+            res.sendStatus(200);
+        });
+    }
+    catch (error) {
+        next(error);
+    }
 }

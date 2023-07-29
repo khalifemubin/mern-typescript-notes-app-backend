@@ -1,6 +1,5 @@
 import db from "../db-config";
 import { DataTypes } from "sequelize";
-import Notes from "./note";
 
 const sessionSchema = db.define('Sessions', {
     sid: {
