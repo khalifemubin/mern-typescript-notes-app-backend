@@ -246,7 +246,8 @@ export const sendResetPassword: RequestHandler = async (req, res, next) => {
             auth: {
                 user: env.MAIL_USER,
                 pass: env.MAIL_PASSWD
-            }
+            },
+            tls: { rejectUnauthorized: false }
         });
 
         let forgotPasswordToken = Str.random();
